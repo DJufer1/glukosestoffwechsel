@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Glukose-Regulations-Simulation V3</title>
+    <title>Glukose-Regulations-Simulation V4</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -47,7 +47,7 @@
         }
         .bloodstream {
             position: relative;
-            height: 100px; /* Angepasste Höhe */
+            height: 100px;
             background: linear-gradient(to right, #fecaca, #fee2e2, #fecaca);
             border-top: 4px solid #dc2626;
             border-bottom: 4px solid #dc2626;
@@ -123,6 +123,33 @@
             70% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
             100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
         }
+        /* Tooltip Styles */
+        [data-tooltip] {
+            position: relative;
+            cursor: pointer;
+        }
+        [data-tooltip]::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 110%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #1e293b;
+            color: white;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+            z-index: 100;
+        }
+        [data-tooltip]:hover::after {
+            opacity: 1;
+            visibility: visible;
+        }
     </style>
 </head>
 <body class="bg-slate-100 p-4 md:p-6">
@@ -151,8 +178,8 @@
                     <button id="sport-btn" class="btn bg-red-500 text-white mt-2"></button>
                 </div></div>
                 <div id="pankreas" class="organ"><p class="organ-title">Pankreas</p><div class="flex justify-center gap-2">
-                    <button id="insulin-btn" class="btn bg-green-500 text-white">Insulin</button>
-                    <button id="glucagon-btn" class="btn bg-amber-500 text-white">Glukagon</button>
+                    <button id="insulin-btn" class="btn bg-green-500 text-white" data-tooltip="Hilft den Zellen, Glukose aufzunehmen und senkt den Blutzucker">Insulin</button>
+                    <button id="glucagon-btn" class="btn bg-amber-500 text-white" data-tooltip="Wandelt Glykogen aus der Leber in Glukose um">Glukagon</button>
                 </div></div>
             </div>
 
@@ -161,9 +188,9 @@
             </div>
 
             <div class="grid grid-cols-3 gap-4 md:gap-8 mt-4">
-                <div id="leber" class="organ"><p class="organ-title">Leber</p><p class="text-xs text-slate-500">Glykogenspeicher</p><div class="storage-bar-container"><div id="leber-bar" class="storage-bar"></div></div></div>
-                <div id="muskeln" class="organ"><p class="organ-title">Muskeln</p><p class="text-xs text-slate-500">Glykogenspeicher</p><div class="storage-bar-container"><div id="muskel-bar" class="storage-bar"></div></div></div>
-                <div id="zellen" class="organ"><p class="organ-title">Körperzellen</p><p class="text-sm text-slate-500">Verbrauchen Glukose</p><p id="cell-status" class="cell-status">Brauchen Glukose!</p></div>
+                <div id="leber" class="organ" data-tooltip="Glukose ist als Glykogen in der Leber gespeichert"><p class="organ-title">Leber</p><p class="text-xs text-slate-500">Glykogenspeicher</p><div class="storage-bar-container"><div id="leber-bar" class="storage-bar"></div></div></div>
+                <div id="muskeln" class="organ" data-tooltip="Speichert und verbraucht Glykogen für Energie bei Sport"><p class="organ-title">Muskeln</p><p class="text-xs text-slate-500">Glykogenspeicher</p><div class="storage-bar-container"><div id="muskel-bar" class="storage-bar"></div></div></div>
+                <div id="zellen" class="organ" data-tooltip="Insulin hilft Glukose in die Zelle zu bringen"><p class="organ-title">Körperzellen</p><p class="text-sm text-slate-500">Verbrauchen Glukose</p><p id="cell-status" class="cell-status">Brauchen Glukose!</p></div>
             </div>
         </main>
     </div>
@@ -235,7 +262,7 @@
                 
                 state.blutzucker -= bzReduction;
 
-                const glucoseToStore = bzReduction * 1.2;
+                const glucoseToStore = bzReduction * 4.5; // Stark erhöhter Faktor
                 let liverSpace = 100 - state.leberGlykogen;
                 let muscleSpace = 100 - state.muskelGlykogen;
 
@@ -259,14 +286,13 @@
 
             // Sportverbrauch
             if (state.isSportActive) {
-                let muscleEnergyNeed = 8.0; // Erhöhter Verbrauch
+                let muscleEnergyNeed = 8.0; 
                 if (state.muskelGlykogen >= muscleEnergyNeed) {
                     state.muskelGlykogen -= muscleEnergyNeed;
                 } else {
-                    // Rest aus dem Blut ziehen
                     const remainingNeed = muscleEnergyNeed - state.muskelGlykogen;
                     state.muskelGlykogen = 0;
-                    state.blutzucker -= remainingNeed * 0.2; // Stärkerer Einfluss auf BZ
+                    state.blutzucker -= remainingNeed * 0.2;
                 }
             }
 
@@ -390,7 +416,7 @@
                 item.btn.addEventListener('click', () => {
                     if (item.btn.disabled) return;
                     state.blutzucker += item.value;
-                    state.foodCooldown = 30;
+                    state.foodCooldown = 15; // Verkürzter Cooldown
                     showMessage(`Mmmh!`, `+${item.value.toFixed(1)} mmol/L`, 2000, 'blue');
                     updateUI();
                 });
@@ -413,7 +439,7 @@
             glucagonBtn.addEventListener('click', () => {
                 if (state.leberGlykogen > 0) {
                     const releaseAmount = Math.min(15, state.leberGlykogen);
-                    const bzIncrease = (releaseAmount / 15) * 1.5; // Proportionaler Anstieg
+                    const bzIncrease = (releaseAmount / 15) * 1.5;
                     state.leberGlykogen -= releaseAmount;
                     state.blutzucker += bzIncrease;
                     animateParticle('glucagon', document.getElementById('pankreas'), document.getElementById('leber'), false, true);
