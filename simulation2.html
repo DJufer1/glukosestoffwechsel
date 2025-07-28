@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Glukose-Regulations-Simulation V6</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            background-color: #eef2f9;
+        }
+        .organ {
+            border: 3px solid #64748b;
+            border-radius: 1rem;
+            padding: 1rem;
+            text-align: center;
+            background-color: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 10;
+        }
+        .organ-title {
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+        }
+        .storage-bar-container {
+            height: 10px;
+            background-color: #e2e8f0;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+        .storage-bar {
+            height: 100%;
+            background-color: #4299e1;
+            transition: width 0.5s ease;
+            border-radius: 5px;
+        }
+        #bloodstream-container {
+            padding: 2rem 0;
+            width: 100%;
+        }
+        .bloodstream {
+            position: relative;
+            height: 100px;
+            background: linear-gradient(to right, #fecaca, #fee2e2, #fecaca);
+            border-top: 4px solid #dc2626;
+            border-bottom: 4px solid #dc2626;
+            overflow: visible;
+            z-index: 5;
+        }
+        .particle {
+            position: fixed;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 50;
+            transition: opacity 0.5s ease;
+        }
+        .glucose {
+            width: 12px;
+            height: 12px;
+            background-color: #3b82f6;
+            box-shadow: 0 0 5px #3b82f6;
+        }
+        .insulin {
+            width: 10px;
+            height: 10px;
+            background-color: #10b981;
+            border: 2px solid #059669;
+            transform: rotate(45deg);
+            border-radius: 0;
+        }
+        .glucagon {
+            width: 14px;
+            height: 14px;
+            background-color: #f59e0b;
+            clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+            border-radius: 0;
+        }
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .message-box {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 2rem 3rem;
+            background-color: rgba(0, 0, 0, 0.85);
+            color: white;
+            border-radius: 1rem;
+            text-align: center;
+            z-index: 100;
+            display: none;
+        }
+        .cell-status {
+            color: #dc2626;
+            font-weight: 600;
+            margin-top: 0.5rem;
+            display: none;
+        }
+        .organ.needs-glucose {
+            border-color: #dc2626;
+            animation: pulse-red 1.5s infinite;
+        }
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+        }
+        /* Tooltip Styles */
+        [data-tooltip] {
+            position: relative;
+            cursor: pointer;
+        }
+        [data-tooltip]::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 110%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #1e293b;
+            color: white;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+            z-index: 100;
+        }
+        [data-tooltip]:hover::after {
+            opacity: 1;
+            visibility: visible;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 p-4 md:p-6">
+
+    <div class="max-w-7xl mx-auto flex flex-col min-h-screen pb-8">
+        <header class="flex-shrink-0">
+            <h1 class="text-3xl font-bold text-center text-slate-800 mb-4">Glukose-Regulations-Simulation</h1>
+            <div class="bg-white p-4 rounded-xl shadow-lg mb-4">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="font-bold text-lg text-slate-700">Aktueller Blutzucker</span>
+                    <span id="bz-value" class="font-bold text-xl text-slate-900">5.5 mmol/L</span>
+                </div>
+                <div class="relative h-64">
+                    <canvas id="bzChart"></canvas>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-grow flex flex-col">
+            <div class="grid grid-cols-2 gap-4 md:gap-8 mb-4">
+                <div id="aktionen" class="organ"><p class="organ-title">Aktionen</p><div class="flex flex-wrap justify-center gap-2">
+                    <button id="meal-btn" class="btn bg-blue-500 text-white"></button>
+                    <button id="choco-btn" class="btn bg-blue-500 text-white"></button>
+                    <button id="apple-btn" class="btn bg-blue-500 text-white"></button>
+                    <button id="sport-btn" class="btn bg-red-500 text-white mt-2"></button>
+                </div></div>
+                <div id="pankreas" class="organ" data-tooltip="Reagiert automatisch auf den Blutzucker"><p class="organ-title">Pankreas</p><div class="flex justify-center gap-2">
+                    <button id="glucagon-btn" class="btn bg-amber-500 text-white" data-tooltip="Wandelt Glykogen aus der Leber in Glukose um">Glukagon</button>
+                </div></div>
+            </div>
+
+            <div id="bloodstream-container">
+                <div id="bloodstream" class="bloodstream w-full"></div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-4 md:gap-8 mt-4">
+                <div id="leber" class="organ" data-tooltip="Glukose ist als Glykogen in der Leber gespeichert"><p class="organ-title">Leber</p><p class="text-xs text-slate-500">Glykogenspeicher</p><div class="storage-bar-container"><div id="leber-bar" class="storage-bar"></div></div></div>
+                <div id="muskeln" class="organ" data-tooltip="Speichert und verbraucht Glykogen für Energie bei Sport"><p class="organ-title">Muskeln</p><p class="text-xs text-slate-500">Glykogenspeicher</p><div class="storage-bar-container"><div id="muskel-bar" class="storage-bar"></div></div></div>
+                <div id="zellen" class="organ" data-tooltip="Insulin hilft Glukose in die Zelle zu bringen"><p class="organ-title">Körperzellen</p><p class="text-sm text-slate-500">Verbrauchen Glukose</p><p id="cell-status" class="cell-status">Brauchen Glukose!</p></div>
+            </div>
+        </main>
+    </div>
+
+    <div id="message-box" class="message-box"><h2 id="message-title"></h2><p id="message-text"></p><button id="restart-btn" class="btn bg-blue-500 text-white mt-4">Neu starten</button></div>
+
+    <script>
+        // --- DOM Elemente ---
+        const bzValue = document.getElementById('bz-value');
+        const leberBar = document.getElementById('leber-bar');
+        const muskelBar = document.getElementById('muskel-bar');
+        const bloodstream = document.getElementById('bloodstream');
+        const cellStatus = document.getElementById('cell-status');
+        const zellenOrgan = document.getElementById('zellen');
+        
+        const glucagonBtn = document.getElementById('glucagon-btn');
+        const mealBtn = document.getElementById('meal-btn');
+        const appleBtn = document.getElementById('apple-btn');
+        const chocoBtn = document.getElementById('choco-btn');
+        const sportBtn = document.getElementById('sport-btn');
+
+        const messageBox = document.getElementById('message-box');
+        const messageTitle = document.getElementById('message-title');
+        const messageText = document.getElementById('message-text');
+        const restartBtn = document.getElementById('restart-btn');
+        const bzChartCanvas = document.getElementById('bzChart');
+
+        // --- Spielzustand ---
+        let state = {};
+        let bzChart;
+        let time = 0;
+
+        function initState() {
+            state = {
+                blutzucker: 5.5,
+                leberGlykogen: 50,
+                muskelGlykogen: 50,
+                insulinInBlut: 1.0, 
+                insulinResistenz: 1.0,
+                glucoseQueue: [],
+                isGameOver: false,
+                hypoTimer: 0,
+                hyperTimer: 0,
+                sportCooldown: 0,
+                foodCooldown: 0,
+                isSportActive: false,
+            };
+            time = 0;
+        }
+
+        function initChart() {
+            if (bzChart) {
+                bzChart.destroy();
+            }
+            const ctx = bzChartCanvas.getContext('2d');
+            bzChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Glukose (mmol/L)',
+                        data: [],
+                        borderWidth: 3,
+                        tension: 0.4,
+                        fill: true,
+                        yAxisID: 'y',
+                        segment: {
+                            borderColor: ctx => {
+                                if (ctx.p1.raw < 3.9) return '#ef4444';
+                                if (ctx.p1.raw > 7.2) return '#facc15';
+                                return '#3b82f6';
+                            },
+                            backgroundColor: ctx => {
+                                if (ctx.p1.raw < 3.9) return 'rgba(239, 68, 68, 0.1)';
+                                if (ctx.p1.raw > 7.2) return 'rgba(250, 204, 21, 0.1)';
+                                return 'rgba(59, 130, 246, 0.1)';
+                            }
+                        }
+                    }, {
+                        label: 'Insulin (relativ)',
+                        data: [],
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: false,
+                        yAxisID: 'y1'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { title: { display: true, text: 'Zeit (Sekunden)' } },
+                        y: { type: 'linear', position: 'left', min: 0, max: 12, title: { display: true, text: 'Glukose (mmol/L)' } },
+                        y1: { type: 'linear', position: 'right', min: 0, max: 15, title: { display: true, text: 'Insulin' }, grid: { drawOnChartArea: false, }, }
+                    },
+                    animation: { duration: 250 },
+                    plugins: { legend: { position: 'top', } }
+                }
+            });
+        }
+
+        // --- Spiel-Loop ---
+        let gameLoop;
+
+        function startGame() {
+            initState();
+            initChart();
+            setupActionListeners();
+            updateUI();
+            clearInterval(gameLoop);
+            gameLoop = setInterval(tick, 1000);
+            messageBox.style.display = 'none';
+        }
+
+        function tick() {
+            if (state.isGameOver) {
+                clearInterval(gameLoop);
+                return;
+            }
+            time++;
+
+            // 1. Verzögerte Glukoseaufnahme
+            state.glucoseQueue = state.glucoseQueue.filter(item => {
+                state.blutzucker += item.perTick;
+                item.duration--;
+                return item.duration > 0;
+            });
+
+            // 2. Automatische Insulin-Ausschüttung
+            if (state.blutzucker > 6.0) {
+                const insulinRelease = (state.blutzucker - 5.5) * 1.2; // Abgeschwächte Reaktion
+                state.insulinInBlut += insulinRelease > 0 ? insulinRelease : 0;
+                animateParticle('insulin', document.getElementById('pankreas'), bloodstream);
+            }
+
+            // 3. Insulinwirkung & Abbau
+            if (state.insulinInBlut > 1.0) {
+                const insulinPower = 0.7 / state.insulinResistenz;
+                const effectiveInsulin = state.insulinInBlut - 1.0;
+                const bzReduction = insulinPower * (effectiveInsulin / 5) * (state.blutzucker / 5.5);
+                state.blutzucker -= bzReduction;
+
+                const glucoseToStore = bzReduction * 4.5;
+                state.leberGlykogen = Math.min(100, state.leberGlykogen + glucoseToStore * 0.5);
+                state.muskelGlykogen = Math.min(100, state.muskelGlykogen + glucoseToStore * 0.5);
+                
+                state.insulinInBlut -= 0.7;
+            }
+            if (state.insulinInBlut < 1.0) {
+                state.insulinInBlut = 1.0;
+            }
+
+            // 4. Grund- & Sportverbrauch
+            let baseConsumption = 0.05;
+            state.blutzucker -= baseConsumption;
+            if (state.isSportActive) {
+                let muscleEnergyNeed = 8.0; 
+                if (state.muskelGlykogen >= muscleEnergyNeed) {
+                    state.muskelGlykogen -= muscleEnergyNeed;
+                } else {
+                    const remainingNeed = muscleEnergyNeed - state.muskelGlykogen;
+                    state.muskelGlykogen = 0;
+                    state.blutzucker -= remainingNeed * 0.2;
+                }
+            }
+
+            // 5. Cooldowns & Grenzen
+            if (state.sportCooldown > 0) state.sportCooldown--;
+            if (state.foodCooldown > 0) state.foodCooldown--;
+            if (state.blutzucker < 0) state.blutzucker = 0;
+
+            checkConditions();
+            updateUI();
+            updateParticlesInBloodstream();
+        }
+
+        function checkConditions() {
+            if (state.blutzucker < 3.0) {
+                state.hypoTimer++;
+                if (state.hypoTimer > 15) gameOver("Hypoglykämie", "Der Blutzucker war zu lange zu tief.");
+            } else {
+                state.hypoTimer = 0;
+            }
+            if (state.blutzucker > 12.0) {
+                state.hyperTimer++;
+                if (state.hyperTimer > 20) {
+                    state.hyperTimer = 0;
+                    state.insulinResistenz += 0.1;
+                    showMessage("Insulinresistenz!", `Zellen reagieren schlechter. (${state.insulinResistenz.toFixed(1)}x)`, 3000, 'red');
+                }
+            } else {
+                state.hyperTimer = 0;
+            }
+        }
+        
+        function gameOver(title, text) {
+            state.isGameOver = true;
+            messageTitle.textContent = title;
+            messageText.textContent = text;
+            messageBox.style.display = 'block';
+        }
+
+        // --- UI Updates ---
+        function updateUI() {
+            bzValue.textContent = `${state.blutzucker.toFixed(1)} mmol/L`;
+            
+            const chartData = bzChart.data;
+            chartData.labels.push(time);
+            chartData.datasets[0].data.push(state.blutzucker.toFixed(1));
+            chartData.datasets[1].data.push(state.insulinInBlut.toFixed(1));
+
+            const maxDataPoints = 120;
+            if (chartData.labels.length > maxDataPoints) {
+                chartData.labels.shift();
+                chartData.datasets.forEach(dataset => dataset.data.shift());
+            }
+            bzChart.update();
+
+            leberBar.style.width = `${state.leberGlykogen}%`;
+            muskelBar.style.width = `${state.muskelGlykogen}%`;
+            
+            if (state.blutzucker > 7.0 && state.insulinInBlut <= 1.1) {
+                cellStatus.style.display = 'block';
+                zellenOrgan.classList.add('needs-glucose');
+            } else {
+                cellStatus.style.display = 'none';
+                zellenOrgan.classList.remove('needs-glucose');
+            }
+            updateButtonStates();
+        }
+
+        function updateButtonStates() {
+            const foodItems = [
+                { btn: mealBtn, name: "Mahlzeit", emoji: "🍝" },
+                { btn: chocoBtn, name: "Schokolade", emoji: "🍫" },
+                { btn: appleBtn, name: "Apfel", emoji: "🍎" },
+            ];
+            foodItems.forEach(item => {
+                item.btn.disabled = state.foodCooldown > 0;
+                item.btn.innerHTML = `${item.emoji} ${item.name} <span class="text-xs ml-1">${state.foodCooldown > 0 ? `(${state.foodCooldown}s)` : ''}</span>`;
+            });
+            sportBtn.disabled = state.sportCooldown > 0;
+            sportBtn.innerHTML = `🏃 Sport treiben <span class="text-xs ml-1">${state.sportCooldown > 0 ? `(${state.sportCooldown}s)` : ''}</span>`;
+            glucagonBtn.disabled = state.leberGlykogen <= 0;
+        }
+
+        function updateParticlesInBloodstream() {
+            updateParticleType('glucose', Math.floor(state.blutzucker * 2.5));
+            updateParticleType('insulin', Math.floor(state.insulinInBlut * 2));
+        }
+
+        function updateParticleType(type, targetCount) {
+            const existingParticles = bloodstream.querySelectorAll(`.${type}`);
+            const diff = targetCount - existingParticles.length;
+            if (diff > 0) for (let i = 0; i < diff; i++) createParticle(type, bloodstream, true);
+            else if (diff < 0) for (let i = 0; i < -diff; i++) if (existingParticles[i]) existingParticles[i].remove();
+        }
+
+        // --- Aktionen ---
+        function setupActionListeners() {
+            const foodItems = [
+                { btn: mealBtn, value: 7.0, duration: 10, insulinSpike: false },
+                { btn: chocoBtn, value: 4.0, duration: 1, insulinSpike: true },
+                { btn: appleBtn, value: 2.5, duration: 8, insulinSpike: false },
+            ];
+            foodItems.forEach(item => {
+                item.btn.addEventListener('click', () => {
+                    if (item.btn.disabled) return;
+                    state.foodCooldown = 15;
+                    
+                    if (item.insulinSpike) {
+                        state.insulinInBlut += 5.0; // Abgeschwächter, aber immer noch starker Spike
+                    }
+
+                    if (item.duration > 1) {
+                        state.glucoseQueue.push({ perTick: item.value / item.duration, duration: item.duration });
+                    } else {
+                        state.blutzucker += item.value;
+                    }
+                    showMessage(`Mmmh!`, `Glukose wird aufgenommen...`, 2000, 'blue');
+                    updateUI();
+                });
+            });
+
+            sportBtn.addEventListener('click', () => {
+                if (sportBtn.disabled) return;
+                state.isSportActive = true;
+                state.sportCooldown = 25;
+                showMessage("Sport!", "Muskeln verbrauchen viel Energie!", 8000, 'red');
+                setTimeout(() => { state.isSportActive = false; }, 8000);
+            });
+
+            glucagonBtn.addEventListener('click', () => {
+                if (state.leberGlykogen > 0) {
+                    const releaseAmount = Math.min(15, state.leberGlykogen);
+                    const bzIncrease = (releaseAmount / 15) * 1.5;
+                    state.leberGlykogen -= releaseAmount;
+                    state.blutzucker += bzIncrease;
+                    animateParticle('glucagon', document.getElementById('pankreas'), document.getElementById('leber'), false, true);
+                    showMessage("Glukagon freigesetzt!", "Leber gibt Glukose frei.", 2000, 'amber');
+                } else {
+                    showMessage("Leber leer!", "Kein Glykogen mehr gespeichert.", 2000, 'red');
+                }
+            });
+            
+            restartBtn.addEventListener('click', startGame);
+        }
+
+        // --- Visualisierungen ---
+        function createParticle(type, parent, isStatic = true) {
+            const p = document.createElement('div');
+            p.className = `particle ${type}`;
+            if (isStatic) {
+                p.style.position = 'absolute';
+                p.style.top = `${Math.random() * 85 + 5}%`;
+                p.style.left = `${Math.random() * 95}%`;
+            }
+            parent.appendChild(p);
+            return p;
+        }
+        
+        function animateGlucoseToCell() {
+            const glucoseParticles = bloodstream.querySelectorAll('.glucose');
+            const insulinParticles = bloodstream.querySelectorAll('.insulin');
+            if (glucoseParticles.length === 0 || insulinParticles.length === 0) return;
+
+            const g = glucoseParticles[Math.floor(Math.random() * glucoseParticles.length)];
+            const i = insulinParticles[Math.floor(Math.random() * insulinParticles.length)];
+            
+            const gRect = g.getBoundingClientRect();
+            const iRect = i.getBoundingClientRect();
+            const cellRect = zellenOrgan.getBoundingClientRect();
+
+            g.style.opacity = 0;
+            i.style.opacity = 0;
+
+            const gClone = g.cloneNode();
+            const iClone = i.cloneNode();
+            gClone.style.opacity = 1;
+            iClone.style.opacity = 1;
+            gClone.style.position = 'fixed';
+            iClone.style.position = 'fixed';
+            gClone.style.left = `${gRect.left}px`;
+            gClone.style.top = `${gRect.top}px`;
+            iClone.style.left = `${iRect.left}px`;
+            iClone.style.top = `${iRect.top}px`;
+            document.body.appendChild(gClone);
+            document.body.appendChild(iClone);
+
+            const targetX = cellRect.left + cellRect.width / 2;
+            const targetY = cellRect.top;
+
+            setTimeout(() => {
+                gClone.style.transition = 'transform 1s ease-in-out, opacity 1s ease-in-out';
+                iClone.style.transition = 'transform 1s ease-in-out, opacity 1s ease-in-out';
+                gClone.style.transform = `translate(${targetX - gRect.left}px, ${targetY - gRect.top}px) scale(0.5)`;
+                iClone.style.transform = `translate(${targetX - iRect.left}px, ${targetY - iRect.top}px) scale(0.5)`;
+                gClone.style.opacity = 0;
+                iClone.style.opacity = 0;
+            }, 10);
+
+            setTimeout(() => {
+                gClone.remove();
+                iClone.remove();
+                g.style.opacity = 1;
+                i.style.opacity = 1;
+            }, 1010);
+        }
+
+        function animateParticle(type, fromElem, toElem, toBloodstream = true, fromOrganToOrgan = false) {
+             const p = createParticle(type, document.body, false);
+             const fromRect = fromElem.getBoundingClientRect();
+             const toRect = toElem.getBoundingClientRect();
+             const bloodRect = bloodstream.getBoundingClientRect();
+
+             const startX = fromRect.left + fromRect.width / 2;
+             const startY = fromRect.bottom;
+             
+             p.style.left = `${startX}px`;
+             p.style.top = `${startY}px`;
+
+             if (fromOrganToOrgan) {
+                const endX = toRect.left + toRect.width / 2;
+                const endY = toRect.bottom;
+                p.style.transition = 'transform 1s ease-in-out, opacity 1s ease-in-out';
+                setTimeout(() => {
+                    p.style.transform = `translate(${endX - startX}px, ${endY - startY}px) scale(0.5)`;
+                    p.style.opacity = 0;
+                }, 10);
+                setTimeout(() => p.remove(), 1010);
+                return;
+             }
+
+             const entryX = startX;
+             const entryY = bloodRect.top + bloodRect.height / 2;
+             p.style.transition = 'transform 0.7s ease-in';
+             setTimeout(() => {
+                 p.style.transform = `translate(${entryX - startX}px, ${entryY - startY}px)`;
+             }, 10);
+
+             setTimeout(() => {
+                p.style.opacity = 0;
+                p.remove();
+             }, 710);
+        }
+
+        function showMessage(title, text, duration, color) {
+            const msgDiv = document.createElement('div');
+            msgDiv.style.position = 'fixed';
+            msgDiv.style.bottom = '20px';
+            msgDiv.style.left = '50%';
+            msgDiv.style.transform = 'translateX(-50%)';
+            msgDiv.style.padding = '1rem 1.5rem';
+            msgDiv.style.borderRadius = '0.75rem';
+            msgDiv.style.color = 'white';
+            msgDiv.style.fontWeight = '600';
+            msgDiv.style.zIndex = '101';
+            const colors = { green: '#10b981', red: '#ef4444', amber: '#f59e0b', blue: '#3b82f6' };
+            msgDiv.style.backgroundColor = colors[color] || '#64748b';
+            msgDiv.innerHTML = `<strong>${title}</strong><br><span class="font-normal">${text}</span>`;
+            document.body.appendChild(msgDiv);
+            setTimeout(() => {
+                msgDiv.style.transition = 'opacity 0.5s ease';
+                msgDiv.style.opacity = '0';
+                setTimeout(() => msgDiv.remove(), 500);
+            }, duration - 500);
+        }
+
+        // --- Initialer Start ---
+        window.onload = () => {
+            startGame();
+        };
+    </script>
+</body>
+</html>
